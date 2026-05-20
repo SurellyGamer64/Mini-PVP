@@ -9,6 +9,12 @@ from datetime import datetime, timezone
 from flask import Flask
 import threading
 
+app = Flask('')
+@app.route('/')
+def home(): return "Bot Online"
+
+def run(): app.run(host='0.0.0.0', port=8080)
+threading.Thread(target=run).start()
 
 # ============================================================
 #  CONFIGURACION - Carga el token seguro desde Render
@@ -5564,7 +5570,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
 # ============================================================
 #  PERFIL DE OTROS USUARIOS
 # ============================================================
-@bot.tree.command(name="verPerfil", description="Ver el perfil de otro usuario")
+@bot.tree.command(name="verperfil", description="Ver el perfil de otro usuario")
 @app_commands.describe(usuario="El usuario cuyo perfil quieres ver")
 async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
     db = load_db()
@@ -5591,7 +5597,7 @@ async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
     embed.add_field(name="⚔️ Equipo activo", value=team_str or "—", inline=False)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="verFiguras", description="Ver las figuras de otro usuario")
+@bot.tree.command(name="verfiguras", description="Ver las figuras de otro usuario")
 @app_commands.describe(usuario="El usuario cuyas figuras quieres ver")
 async def ver_figuras(interaction: discord.Interaction, usuario: discord.Member):
     db = load_db()
