@@ -20,7 +20,7 @@ threading.Thread(target=run).start()
 #  CONFIGURACION - Carga el token seguro desde Render
 # ============================================================
 
-KEY = os.getenv("PASS")
+TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "!"
 
 # ============================================================
@@ -3932,113 +3932,6 @@ async def end_mp_battle(inter: discord.Interaction, battle: MPBattleState, chann
         if battle.message:
             await battle.message.edit(embed=embed, view=None)
 
-# --- COMANDO /multiplayer ---
-@bot.tree.command(name="multiplayer", description="Crea una batalla de hasta 4 jugadores")
-async def multiplayer(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-    if not user.get("figures"):
-        await interaction.response.send_message("❌ Necesitas figuras para batallar.", ephemeral=True)
-        return
-    if interaction.channel_id in active_mp_battles or interaction.channel_id in active_battles:
-        await interaction.response.send_message("❌ Ya hay una batalla activa en este canal.", ephemeral=True)
-        return
-
-    # Sala de espera
-    lobby = {
-        "host": interaction.user.id,
-        "players": [interaction.user.id],
-        "channel_id": interaction.channel_id,
-    }
-
-    embed = discord.Embed(
-        title="⚔️ Sala de Batalla Multiplayer",
-        description=f"**{user['name']}** abrió una sala. ¡Únete antes de que empiece!\n\n**Jugadores:** {user['name']}\n_(Mínimo 2, máximo 4)_",
-        color=0x3498db
-    )
-    embed.set_footer(text="El host puede iniciar con 2+ jugadores")
-
-    join_btn  = discord.ui.Button(label="⚔️ Unirme", style=discord.ButtonStyle.primary, custom_id="mp_join")
-    start_btn = discord.ui.Button(label="▶️ Iniciar", style=discord.ButtonStyle.success, custom_id="mp_start", disabled=True)
-    view = discord.ui.View(timeout=120)
-
-    async def join_cb(inter: discord.Interaction):
-        if inter.user.id in lobby["players"]:
-            await inter.response.send_message("✅ Ya estás en la sala.", ephemeral=True)
-            return
-        if len(lobby["players"]) >= 4:
-            await inter.response.send_message("❌ La sala está llena (máx 4).", ephemeral=True)
-            return
-        db2 = load_db()
-        u2 = get_user(db2, inter.user.id)
-        if not u2:
-            await inter.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-            return
-        if not u2.get("figures"):
-            await inter.response.send_message("❌ Necesitas figuras para unirte.", ephemeral=True)
-            return
-        lobby["players"].append(inter.user.id)
-
-        db3 = load_db()
-        names = [get_user(db3, pid)["name"] for pid in lobby["players"]]
-        new_embed = discord.Embed(
-            title="⚔️ Sala de Batalla Multiplayer",
-            description=f"**Jugadores ({len(lobby['players'])}/4):**\n" + "\n".join(f"• {n}" for n in names),
-            color=0x3498db
-        )
-        start_btn.disabled = len(lobby["players"]) < 2
-        await inter.response.edit_message(embed=new_embed, view=view)
-
-    async def start_cb(inter: discord.Interaction):
-        if inter.user.id != lobby["host"]:
-            await inter.response.send_message("❌ Solo el host puede iniciar.", ephemeral=True)
-            return
-        if len(lobby["players"]) < 2:
-            await inter.response.send_message("❌ Necesitas al menos 2 jugadores.", ephemeral=True)
-            return
-
-        db2 = load_db()
-        teams = {}
-        names = {}
-        players_order = lobby["players"].copy()
-        random.shuffle(players_order)
-
-        for pid in players_order:
-            u = get_user(db2, pid)
-            if not u or not u.get("figures"):
-                continue
-            team_indices = u.get("team", [None,None,None])
-            figs = u.get("figures", [])
-            keys = []
-            figs_data = []
-            for idx in team_indices:
-                if idx is not None and idx < len(figs):
-                    keys.append(figs[idx]["key"])
-                    figs_data.append(figs[idx])
-            while len(keys) < 3 and figs:
-                keys.append(figs[0]["key"])
-                figs_data.append(figs[0])
-            teams[pid] = [make_fighter(k, fd) for k, fd in zip(keys[:3], figs_data[:3])]
-            names[pid] = u["name"]
-
-        battle = MPBattleState(players_order, teams, names)
-        active_mp_battles[inter.channel_id] = battle
-
-        embed2 = battle.get_embed(title="⚔️ ¡BATALLA MULTIPLAYER INICIADA!")
-        view2 = get_mp_view(battle, inter.channel_id)
-        await inter.response.edit_message(embed=embed2, view=view2)
-        battle.message = await inter.original_response()
-
-    join_btn.callback  = join_cb
-    start_btn.callback = start_cb
-    view.add_item(join_btn)
-    view.add_item(start_btn)
-
-    await interaction.response.send_message(embed=embed, view=view)
-
 # --- RETAR A JUGADOR ---
 @bot.tree.command(name="retar", description="Reta a otro jugador a un duelo PvP de equipos")
 @app_commands.describe(rival="El jugador al que quieres retar")
@@ -6465,11 +6358,5 @@ _base_check_figure_levelup = check_figure_levelup
 # ============================================================
 #  ARRANQUE
 # ============================================================
-bot.run(KEY)
+bot.run(TOKEN)
 
-app = Flask('')
-@app.route('/')
-def home(): return "Bot Online"
-
-def run(): app.run(host='0.0.0.0', port=8080)
-threading.Thread(target=run).start()
