@@ -6386,10 +6386,12 @@ _base_check_figure_levelup = check_figure_levelup
 
 
 # --- SAY (solo matheogamer64) ---
-@bot.tree.command(name="say", description="[MATHEO] Haz que el bot diga algo")
+GAMER_ID = 1236293193893412975
+
+@bot.tree.command(name="say", description="[GAMER] Con este comando, puedes hacer que el bot diga lo que quieras")
 @app_commands.describe(mensaje="Lo que dirá el bot")
 async def say(interaction: discord.Interaction, mensaje: str):
-    if interaction.user.id != MATHEO_ID:
+    if interaction.user.id != GAMER_ID:
         await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
         return
     # Borrar la interacción silenciosamente y enviar el mensaje como el bot
