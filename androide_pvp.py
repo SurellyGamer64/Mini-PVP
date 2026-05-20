@@ -4317,18 +4317,47 @@ async def ayuda(interaction: discord.Interaction):
         description="¡Bienvenido al sistema de batallas de figuras!",
         color=0x3498db
     )
-    embed.add_field(name="📋 Inicio", value="`/registrar` — Créate una cuenta y recibe 1,000 monedas", inline=False)
-    embed.add_field(name="👤 Perfil", value="`/perfil` — Ve tus stats, nivel y monedas", inline=False)
-    embed.add_field(name="🏪 Tienda", value="`/tienda` — Compra nuevas figuras con botones", inline=False)
-    embed.add_field(name="🎭 Colección", value="`/misfiguras` — Ve todas tus figuras y sus niveles", inline=False)
-    embed.add_field(name="⚡ Equipar", value="`/equipar` — Elige tu figura activa para batallar", inline=False)
-    embed.add_field(name="🤖 PvP vs Bot", value="`/pvpbot` — Batalla contra un bot IA", inline=False)
-    embed.add_field(name="⚔️ PvP", value="`/retar @usuario` — Reta a otro jugador a duelo", inline=False)
-    embed.add_field(name="🏆 Ranking", value="`/ranking` — Top 10 del servidor", inline=False)
-    embed.add_field(name="📅 Diario", value="`/diario` — Reclama monedas diarias y mantén tu racha!", inline=False)
-    embed.add_field(name="💰 Admin", value="`/oro @usuario cantidad` — Regala monedas a un usuario [Solo admins]", inline=False)
-    embed.add_field(name="🧑‍🍳 Cocina", value="`/cook` — Cocina con una langosta + hasta 3 ingredientes para conseguir buffs!\n`/ingredientes` — Ve tu despensa de ingredientes", inline=False)
-    embed.set_footer(text="¡Colecciona, mejora y conquista la arena!")
+    # ── Básicos ────────────────────────────────────────────────
+    embed.add_field(name="📋 Inicio",     value="`/registrar` — Créate una cuenta y recibe 1,000 monedas", inline=False)
+    embed.add_field(name="👤 Perfil",     value="`/perfil [@usuario]` — Ve tus stats o los de otro jugador", inline=False)
+    embed.add_field(name="🏪 Tienda",     value="`/tienda` — Compra nuevas figuras", inline=False)
+    embed.add_field(name="🎭 Figuras",    value="`/misfiguras [@usuario]` — Colección de figuras con flechas\n`/verperfil @usuario` · `/verfiguras @usuario` — Ver info de otro jugador", inline=False)
+    embed.add_field(name="⚡ Equipar",    value="`/equipar` — Arma tu equipo de 3 figuras (Frontal/Centro/Trasero)", inline=False)
+    embed.add_field(name="🦞 Langosta",   value="`/lobster` — Obtén una langosta misteriosa", inline=False)
+    # ── Batallas ───────────────────────────────────────────────
+    embed.add_field(name="⚔️ Batallas",  value=(
+        "`/pvpbot` — Elige un rival bot (5 niveles + 4 jefes)\n"
+        "`/retar @usuario` — Reta a otro jugador 1v1\n"
+        "`/multiplayer` — Batalla de 2 a 4 jugadores\n"
+        "`/reset` — Cancela la batalla activa del canal"
+    ), inline=False)
+    # ── Economía ───────────────────────────────────────────────
+    embed.add_field(name="💰 Economía",  value=(
+        "`/diario` — Recompensa diaria + racha semanal\n"
+        "`/work` — Trabaja con minijuegos para ganar monedas (cooldown 1h)\n"
+        "`/rob @usuario` — Intenta robarle monedas (cooldown 2h)\n"
+        "`/perfil` — Ve tus monedas y stats actuales"
+    ), inline=False)
+    # ── Cocina ─────────────────────────────────────────────────
+    embed.add_field(name="🧑‍🍳 Cocina",   value=(
+        "`/cook` — Cocina 🦞 Langosta + hasta 3 ingredientes para conseguir buffs\n"
+        "`/ingredientes` — Ve tu despensa de ingredientes"
+    ), inline=False)
+    # ── Exploración & Quests ───────────────────────────────────
+    embed.add_field(name="🗺️ Exploración & Quests", value=(
+        "`/exploracion` — Manda 3 figuras a explorar (30 min) para conseguir recompensas\n"
+        "`/quest` — Activa misiones especiales (ej: desbloquear a Jane Doe)"
+    ), inline=False)
+    # ── Rankings ───────────────────────────────────────────────
+    embed.add_field(name="🏆 Rankings",  value="`/ranking` — 4 leaderboards: Victorias · Dinero · Figuras · Niveles", inline=False)
+    # ── Admin (solo matheogamer64) ─────────────────────────────
+    embed.add_field(name="🔒 Solo Matheo", value=(
+        "`/oro @usuario cantidad` — Regala monedas\n"
+        "`/bomb @usuario cantidad` — Quita monedas\n"
+        "`/nuke @usuario` — Resetea a un jugador\n"
+        "`/say [mensaje]` — El bot habla"
+    ), inline=False)
+    embed.set_footer(text="¡Colecciona, mejora y conquista la arena! | Androide del PvP")
     await interaction.response.send_message(embed=embed)
 
 
@@ -6354,6 +6383,18 @@ show_shop_page = show_shop_page_with_quest_filter
 _base_check_figure_levelup = check_figure_levelup
 
 
+
+
+# --- SAY (solo matheogamer64) ---
+@bot.tree.command(name="say", description="[MATHEO] Haz que el bot diga algo")
+@app_commands.describe(mensaje="Lo que dirá el bot")
+async def say(interaction: discord.Interaction, mensaje: str):
+    if interaction.user.id != MATHEO_ID:
+        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
+        return
+    # Borrar la interacción silenciosamente y enviar el mensaje como el bot
+    await interaction.response.send_message("✅ Enviado.", ephemeral=True)
+    await interaction.channel.send(mensaje)
 
 # ============================================================
 #  ARRANQUE
