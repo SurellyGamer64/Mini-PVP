@@ -20,7 +20,7 @@ threading.Thread(target=run).start()
 #  CONFIGURACION - Carga el token seguro desde Render
 # ============================================================
 
-TOKEN = os.getenv("DISCORD_TOKEN")
+KEY = os.getenv("PASS")
 PREFIX = "!"
 
 # ============================================================
@@ -6465,7 +6465,7 @@ _base_check_figure_levelup = check_figure_levelup
 # ============================================================
 #  ARRANQUE
 # ============================================================
-bot.run(TOKEN)
+bot.run(KEY)
 
 app = Flask('')
 @app.route('/')
