@@ -2903,14 +2903,19 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
     save_db(db)
     embed.add_field(name="💰 Recompensas", value=f"Ganador: +{COINS_WIN}🪙 +{XP_PER_WIN}XP | Perdedor: +{COINS_LOSS}🪙", inline=False)
 
-    # Dar ingrediente al ganador si tiene suerte
-    if random.randint(1, 100) <= BATTLE_INGREDIENT_DROP_CHANCE:
-        db2 = load_db()
-        winner_data2 = get_user(db2, winner_id)
-        if winner_data2:
-            ing = give_battle_ingredient(winner_data2)
-            save_db(db2)
-            embed.add_field(name="🧑‍🍳 ¡Ingrediente encontrado!", value=f"¡Conseguiste {ing} **{INGREDIENTS.get(ing, '')}** para cocinar!", inline=False)
+    # Dar ingrediente al ganador si tiene suerte (40% de prob)
+    if winner_id and winner_id != 0 and random.randint(1, 100) <= BATTLE_INGREDIENT_DROP_CHANCE:
+        db_ing = load_db()
+        winner_ing = get_user(db_ing, winner_id)
+        if winner_ing:
+            ing = give_battle_ingredient(winner_ing)
+            save_db(db_ing)
+            ing_name = INGREDIENTS.get(ing, "")
+            embed.add_field(
+                name="🧑‍🍳 ¡Ingrediente encontrado!",
+                value=f"¡{winner_ing['name']} consiguió {ing} **{ing_name}** para cocinar!",
+                inline=False
+            )
 
     if channel_id in active_battles:
         del active_battles[channel_id]
@@ -2927,7 +2932,7 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
         changed = False
         for qid in winner3.get("active_quests", []):
             prev = winner3.get("quest_progress", {}).get(qid, 0)
-            await check_quest_drops(winner3, qid, interaction.channel, db_after)
+            await check_quest_drops(winner3, qid, interaction.channel, db3)
             if winner3.get("quest_progress", {}).get(qid, 0) != prev:
                 changed = True
         if changed:
@@ -5918,7 +5923,7 @@ def pick_exploration_reward(user: dict) -> dict:
                 user["recipe_sheets"].append(sheet["recipe_idx"])
                 return {"type": "recipe_sheet", "desc": f"📜 ¡Hoja de receta: {sheet['name']}!"}
             elif reward["type"] == "figure":
-                buyable = [k for k, v in FIGURES.items() if v.get("price", 0) > 0 and k not in ("roblox_boss", "janedoe") or is_quest_unlocked(user, "documentos_jane")]
+                buyable = [k for k, v in FIGURES.items() if v.get("price", 0) > 0 and k not in ("roblox_boss", "janedoe", "santa_vaca", "lobster")]
                 if buyable:
                     fig_key = random.choice(buyable)
                     user["figures"].append({"key": fig_key, "level": 1, "xp": 0})
@@ -5969,11 +5974,32 @@ async def exploracion_cmd(interaction: discord.Interaction):
                     break
         u2["exploration"] = None
         save_db(db2)
-        embed = discord.Embed(title="🎒 ¡Tu equipo regresó de la exploración!", color=0xf1c40f)
+        embed = discord.Embed(
+            title="🎒 ¡Tu equipo regresó de la exploración!",
+            description=f"Estuvieron fuera **30 minutos** y esto encontraron:",
+            color=0xf1c40f
+        )
+        total_coins = 0
+        total_ings = []
+        total_figs = []
         for i, r in enumerate(rewards):
             fig_key = exp["fig_keys"][i] if i < len(exp["fig_keys"]) else "?"
             fig_name = FIGURES.get(fig_key, {}).get("name", fig_key)
             embed.add_field(name=f"🗺️ {fig_name} encontró:", value=r["desc"], inline=False)
+            if r["type"] == "coins":
+                total_coins += int(r["desc"].replace("💰 +","").replace(" monedas","").replace(",","") if "monedas" in r["desc"] else 0)
+            elif r["type"] == "ingredient":
+                total_ings.append(r["desc"])
+            elif r["type"] == "figure":
+                total_figs.append(r["desc"])
+
+        if total_coins > 0:
+            embed.add_field(name="💰 Total monedas", value=f"+{total_coins:,}🪙", inline=True)
+        if total_ings:
+            embed.add_field(name="🧺 Ingredientes", value="\n".join(total_ings), inline=True)
+        if total_figs:
+            embed.add_field(name="🎭 Figuras", value="\n".join(total_figs), inline=True)
+        embed.set_footer(text="Usa /exploracion de nuevo para mandar a explorar!")
         await interaction.response.send_message(embed=embed)
         return
 
