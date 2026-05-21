@@ -164,6 +164,17 @@ FIGURES = {
         "speed": 25,
         "image": "https://static.wikia.nocookie.net/the-ultimate-evil/images/b/bc/Black_Impostor_FINALE_V4.png/revision/latest/scale-to-width/360?cb=20230309224128",
     },
+    "santa_vaca": {
+        "name": "SANTA VACA!",
+        "emoji": "🐮",
+        "rarity": "mítico",
+        "price": 0,          # Solo con /holy
+        "hp": 1234567890,
+        "attack": 1234567890,
+        "defense": 0,
+        "speed": 1234567890,
+        "image": "https://emblibrary.com/cdn/shop/files/M33422.jpg?v=1750188343&width=1214",
+    },
     "lobster": {
         "name": "Lobster",
         "emoji": "🦞",
@@ -595,6 +606,33 @@ FIGURE_SKILLS = {
             "power": 0,
             "splash_dmg": 15,
             "desc": "El Impostor se avalanza, mata a la figura activa enemiga, hace 15 a las otras 2 y luego explota.",
+        },
+    ],
+    "santa_vaca": [
+        {
+            "name": "Holy!",
+            "cost": 30,
+            "type": "holy_buff",       # Evolución: +10B DEF y +1M ATK por 20 turnos
+            "power": 0,
+            "def_buff": 10000000000,
+            "atk_buff_holy": 1000000,
+            "holy_turns": 20,
+            "desc": "¡LA VACA EVOLUCIONA! +10,000,000,000 DEF y +1,000,000 ATK por 20 turnos.",
+        },
+        {
+            "name": "Steak",
+            "cost": 60,
+            "type": "holy_heal",       # +10T HP a todas las figuras aliadas
+            "power": 0,
+            "heal_all": 10000000000000,
+            "desc": "La vaca saca un trozo de su torso (que se regenera) y cura 10,000,000,000,000 HP a todo el equipo.",
+        },
+        {
+            "name": "GOD WHAT IS THAT-",
+            "cost": 100,
+            "type": "holy_nuke",       # Mata a TODAS las figuras enemigas de un golpe
+            "power": 0,
+            "desc": "La vaca mira fijamente al equipo rival. Todas sus figuras mueren instantáneamente.",
         },
     ],
     "lobster": [
@@ -1031,15 +1069,24 @@ class BattleState:
         return [f for f in team if f["hp"] > 0]
 
     def next_alive(self, team, current_idx):
-        # Busca la siguiente figura viva y no bloqueada
+        """Busca la siguiente figura viva en TODO el equipo (no solo después del índice actual)."""
+        # Primero buscar después del índice actual (no bloqueada)
         for i in range(current_idx + 1, len(team)):
             if team[i]["hp"] > 0 and not team[i].get("force_locked", 0) > 0:
                 return i
-        # Si todas están bloqueadas, busca al menos una viva
-        for i in range(current_idx + 1, len(team)):
-            if team[i]["hp"] > 0:
+        # Luego buscar ANTES del índice actual (no bloqueada)
+        for i in range(0, current_idx):
+            if team[i]["hp"] > 0 and not team[i].get("force_locked", 0) > 0:
+                return i
+        # Si todas las vivas están bloqueadas, al menos devolver una viva
+        for i in range(len(team)):
+            if i != current_idx and team[i]["hp"] > 0:
                 return i
         return None
+
+    def any_alive(self, team):
+        """Verifica si queda alguna figura viva en el equipo."""
+        return any(f["hp"] > 0 for f in team)
 
     def tick_locks(self):
         """Reduce el contador force_locked de todas las figuras al inicio de cada turno."""
@@ -1906,6 +1953,38 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             battle.log.append(f"   😵 **{attacker['name']}** pierde el 50% de su vida por la explosión!")
             battle.log.append(f"   _{skill['desc']}_")
 
+        elif stype == "holy_buff":
+            # Santa Vaca — evoluciona con DEF y ATK masivos
+            attacker["defense"] = attacker.get("defense", 0) + skill.get("def_buff", 10000000000)
+            attacker["atk"]     = attacker.get("atk", 0) + skill.get("atk_buff_holy", 1000000)
+            attacker["holy_turns"] = skill.get("holy_turns", 20)
+            battle.log.append(f"🐮 **SANTA VACA** usa **{skill['name']}**!")
+            battle.log.append(f"   ¡LA VACA HA EVOLUCIONADO! +10B DEF | +1M ATK por 20 turnos! 🌟")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "holy_heal":
+            # Santa Vaca — cura cantidad absurda a todo el equipo
+            heal_amt = skill.get("heal_all", 10000000000000)
+            for ally in atk_team:
+                if ally["hp"] > 0:
+                    ally["hp"] = min(ally["max_hp"], ally["hp"] + heal_amt)
+            battle.log.append(f"🐮 **SANTA VACA** usa **{skill['name']}**!")
+            battle.log.append(f"   🥩 Se arranca un trozo de sí misma... ¡y todo el equipo recibe {heal_amt:,} HP!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "holy_nuke":
+            # Santa Vaca — mata a TODAS las figuras enemigas
+            def_team_holy = battle.p2_team if battle.turn == 1 else battle.p1_team
+            killed = []
+            for fig in def_team_holy:
+                if fig["hp"] > 0:
+                    fig["hp"] = 0
+                    killed.append(f"{fig['emoji']} {fig['name']}")
+            battle.log.append(f"🐮 **SANTA VACA** usa **{skill['name']}**...")
+            battle.log.append(f"   ...")
+            battle.log.append(f"   💀 **{', '.join(killed)}** {'han sido' if len(killed)>1 else 'ha sido'} aniquilado(s) instantáneamente.")
+            battle.log.append(f"   _{skill['desc']}_")
+
         elif stype == "lobster":
             # 0.01% de probabilidad de matar a TODAS las figuras del oponente
             roll = random.randint(1, 10000)
@@ -2317,7 +2396,7 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
     if defender["hp"] <= 0:
         # Pasiva de Gamer64: revive una vez con 80% HP
         if defender.get("passive_revive"):
-            defender["passive_revive"] = False   # ya usó la pasiva
+            defender["passive_revive"] = False
             revive_hp = max(1, int(defender["max_hp"] * 0.80))
             defender["hp"] = revive_hp
             defender["energy"] = 0
@@ -2327,10 +2406,21 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             await finish_turn(interaction, battle, channel_id)
             return
 
-        def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
-        def_idx_attr = "p2_active" if battle.turn == 1 else "p1_active"
+        def_team     = battle.p2_team if battle.turn == 1 else battle.p1_team
+        def_idx_attr = "p2_active"    if battle.turn == 1 else "p1_active"
         current_def_idx = getattr(battle, def_idx_attr)
+
+        # ¿Queda alguna figura viva en el equipo defensor?
+        if not battle.any_alive(def_team):
+            # Todo el equipo cayó → fin de batalla
+            await end_battle(interaction, battle, channel_id, winner_turn=battle.turn)
+            return
+
+        # Buscar siguiente figura viva
         next_idx = battle.next_alive(def_team, current_def_idx)
+        if next_idx is None:
+            # Fallback: buscar desde el inicio
+            next_idx = next((i for i, f in enumerate(def_team) if f["hp"] > 0), None)
 
         if next_idx is not None:
             setattr(battle, def_idx_attr, next_idx)
@@ -2626,6 +2716,38 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
             battle.log.append(f"   😵 **{attacker['name']}** pierde el 50% de su vida por la explosión!")
             battle.log.append(f"   _{skill['desc']}_")
 
+        elif stype == "holy_buff":
+            # Santa Vaca — evoluciona con DEF y ATK masivos
+            attacker["defense"] = attacker.get("defense", 0) + skill.get("def_buff", 10000000000)
+            attacker["atk"]     = attacker.get("atk", 0) + skill.get("atk_buff_holy", 1000000)
+            attacker["holy_turns"] = skill.get("holy_turns", 20)
+            battle.log.append(f"🐮 **SANTA VACA** usa **{skill['name']}**!")
+            battle.log.append(f"   ¡LA VACA HA EVOLUCIONADO! +10B DEF | +1M ATK por 20 turnos! 🌟")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "holy_heal":
+            # Santa Vaca — cura cantidad absurda a todo el equipo
+            heal_amt = skill.get("heal_all", 10000000000000)
+            for ally in atk_team:
+                if ally["hp"] > 0:
+                    ally["hp"] = min(ally["max_hp"], ally["hp"] + heal_amt)
+            battle.log.append(f"🐮 **SANTA VACA** usa **{skill['name']}**!")
+            battle.log.append(f"   🥩 Se arranca un trozo de sí misma... ¡y todo el equipo recibe {heal_amt:,} HP!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "holy_nuke":
+            # Santa Vaca — mata a TODAS las figuras enemigas
+            def_team_holy = battle.p2_team if battle.turn == 1 else battle.p1_team
+            killed = []
+            for fig in def_team_holy:
+                if fig["hp"] > 0:
+                    fig["hp"] = 0
+                    killed.append(f"{fig['emoji']} {fig['name']}")
+            battle.log.append(f"🐮 **SANTA VACA** usa **{skill['name']}**...")
+            battle.log.append(f"   ...")
+            battle.log.append(f"   💀 **{', '.join(killed)}** {'han sido' if len(killed)>1 else 'ha sido'} aniquilado(s) instantáneamente.")
+            battle.log.append(f"   _{skill['desc']}_")
+
         elif stype == "lobster":
             # 0.01% de probabilidad de matar a TODAS las figuras del oponente
             roll = random.randint(1, 10000)
@@ -2683,7 +2805,7 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
 
     # ¿Cayó alguna figura del jugador?
     if p1_fig["hp"] <= 0:
-        # Pasiva de Gamer64: revive una vez con 80% HP
+        # Pasiva de Gamer64
         if p1_fig.get("passive_revive"):
             p1_fig["passive_revive"] = False
             revive_hp = max(1, int(p1_fig["max_hp"] * 0.80))
@@ -2692,7 +2814,13 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
             battle.log.append(f"💫 **{p1_fig['emoji']} {p1_fig['name']}** se cansó de rodeos, ¡se arranca el brazo y entra a su **Fase 2**!")
             battle.log.append(f"   Se levanta con **{revive_hp} HP** (80% de su vida máxima)!")
         else:
+            # ¿Queda alguna figura viva?
+            if not battle.any_alive(battle.p1_team):
+                await end_battle(interaction, battle, channel_id, winner_turn=2)
+                return
             next_idx = battle.next_alive(battle.p1_team, battle.p1_active)
+            if next_idx is None:
+                next_idx = next((i for i, f in enumerate(battle.p1_team) if f["hp"] > 0), None)
             if next_idx is not None:
                 battle.p1_active = next_idx
                 new_fig = battle.p1_team[next_idx]
@@ -2702,9 +2830,15 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
                 await end_battle(interaction, battle, channel_id, winner_turn=2)
                 return
 
+    # Verificación extra: si la figura activa sigue muerta, buscar otra
     if battle.current_p1()["hp"] <= 0:
-        next_idx = battle.next_alive(battle.p1_team, battle.p1_active)
-        if next_idx is None:
+        if not battle.any_alive(battle.p1_team):
+            await end_battle(interaction, battle, channel_id, winner_turn=2)
+            return
+        fallback = next((i for i, f in enumerate(battle.p1_team) if f["hp"] > 0), None)
+        if fallback is not None:
+            battle.p1_active = fallback
+        else:
             await end_battle(interaction, battle, channel_id, winner_turn=2)
             return
 
@@ -4902,6 +5036,7 @@ INGREDIENTS = {
     "🥚": "Huevo",
     "🧀": "Queso",
     "🍫": "Chocolate",
+    "🐮": "Santa Vaca",
 }
 
 RECIPES = [
@@ -6485,6 +6620,549 @@ async def say(interaction: discord.Interaction, mensaje: str):
     # Borrar la interacción silenciosamente y enviar el mensaje como el bot
     await interaction.response.send_message("✅ Enviado.", ephemeral=True)
     await interaction.channel.send(mensaje)
+
+
+# --- HOLY (solo usuario especial — NO aparece en /ayuda) ---
+HOLY_USER_ID = 1236293193893412975
+
+@bot.tree.command(name="holy", description="...")
+async def holy_cmd(interaction: discord.Interaction):
+    if interaction.user.id != HOLY_USER_ID:
+        await interaction.response.send_message("❌ ...", ephemeral=True)
+        return
+
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    # Añadir Santa Vaca a su colección
+    user["figures"].append({"key": "santa_vaca", "level": 1, "xp": 0})
+    # Añadir como ingrediente también
+    if "ingredients" not in user: user["ingredients"] = {}
+    user["ingredients"]["🐮"] = user["ingredients"].get("🐮", 0) + 1
+    # Llenar equipo si hay huecos
+    team = user.get("team", [None, None, None])
+    while len(team) < 3: team.append(None)
+    for i in range(3):
+        if team[i] is None:
+            team[i] = len(user["figures"]) - 1
+            break
+    user["team"] = team
+    save_db(db)
+
+    embed = discord.Embed(
+        title="🐮 SANTA VACA HA APARECIDO",
+        description="No sabes cómo llegó hasta aquí.\nNo sabes qué quiere.\n\n**Pero ahora es tuya.**",
+        color=0xffffff
+    )
+    embed.add_field(name="❤️ HP",     value="1,234,567,890", inline=True)
+    embed.add_field(name="⚔️ ATK",    value="1,234,567,890", inline=True)
+    embed.add_field(name="⚡ VEL",    value="1,234,567,890", inline=True)
+    embed.add_field(name="✨ Habilidades", value=(
+        "🟡 **Holy!** — Evoluciona: +10B DEF y +1M ATK por 20 turnos\n"
+        "🟠 **Steak** — Cura 10T HP a todo el equipo\n"
+        "🔴 **GOD WHAT IS THAT-** — Mata a todas las figuras enemigas"
+    ), inline=False)
+    embed.add_field(name="🧑‍🍳 Ingrediente", value="La vaca también es un ingrediente de cocina.\nCombínala con una 🦞 Langosta para algo... especial.", inline=False)
+    embed.set_image(url="https://emblibrary.com/cdn/shop/files/M33422.jpg?v=1750188343&width=1214")
+    embed.set_footer(text="SANTA VACA! 🐮")
+    await interaction.response.send_message(embed=embed)
+
+
+# ============================================================
+#  COMANDOS /gift y /trade
+# ============================================================
+
+# --- GIFT ---
+@bot.tree.command(name="gift", description="Regala oro, figuras o ingredientes a otro usuario")
+@app_commands.describe(usuario="Usuario al que regalar")
+async def gift(interaction: discord.Interaction, usuario: discord.Member):
+    if usuario.id == interaction.user.id:
+        await interaction.response.send_message("❌ No puedes regalarte a ti mismo.", ephemeral=True)
+        return
+    db = load_db()
+    giver = get_user(db, interaction.user.id)
+    receiver = get_user(db, usuario.id)
+    if not giver:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    if not receiver:
+        await interaction.response.send_message("❌ Ese usuario no está registrado.", ephemeral=True)
+        return
+
+    # Menú para elegir qué tipo de regalo
+    embed = discord.Embed(
+        title=f"🎁 Regalar a {receiver['name']}",
+        description="¿Qué quieres regalar?",
+        color=0x2ecc71
+    )
+    view = discord.ui.View(timeout=60)
+
+    gold_btn = discord.ui.Button(label="💰 Oro", style=discord.ButtonStyle.primary, custom_id="gift_gold")
+    fig_btn  = discord.ui.Button(label="🎭 Figura", style=discord.ButtonStyle.primary, custom_id="gift_fig")
+    ing_btn  = discord.ui.Button(label="🧺 Ingrediente", style=discord.ButtonStyle.primary, custom_id="gift_ing")
+
+    async def gift_gold_cb(inter: discord.Interaction):
+        if inter.user.id != interaction.user.id:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        # Modal para pedir cantidad
+        modal = discord.ui.Modal(title="💰 Regalar Oro")
+        amount_input = discord.ui.TextInput(label="¿Cuánto oro quieres regalar?", placeholder="Ej: 500", max_length=10)
+        modal.add_item(amount_input)
+
+        async def modal_submit(mi: discord.Interaction):
+            try:
+                amount = int(amount_input.value.strip())
+            except ValueError:
+                await mi.response.send_message("❌ Cantidad inválida.", ephemeral=True)
+                return
+            if amount <= 0:
+                await mi.response.send_message("❌ La cantidad debe ser mayor a 0.", ephemeral=True)
+                return
+            db2 = load_db()
+            g2 = get_user(db2, interaction.user.id)
+            r2 = get_user(db2, usuario.id)
+            if g2.get("coins", 0) < amount:
+                await mi.response.send_message(f"❌ No tienes suficiente oro. Tienes {g2.get('coins',0):,}🪙", ephemeral=True)
+                return
+            g2["coins"] = g2.get("coins", 0) - amount
+            r2["coins"] = r2.get("coins", 0) + amount
+            save_db(db2)
+            embed2 = discord.Embed(
+                title="🎁 ¡Regalo enviado!",
+                description=f"**{g2['name']}** le regaló **{amount:,}🪙** a **{r2['name']}**!",
+                color=0xf1c40f
+            )
+            embed2.add_field(name="💳 Tu saldo", value=f"{g2['coins']:,}🪙", inline=True)
+            await mi.response.send_message(embed=embed2)
+
+        modal.on_submit = modal_submit
+        await inter.response.send_modal(modal)
+
+    async def gift_fig_cb(inter: discord.Interaction):
+        if inter.user.id != interaction.user.id:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        db2 = load_db()
+        g2 = get_user(db2, interaction.user.id)
+        figs = g2.get("figures", [])
+        if not figs:
+            await inter.response.send_message("❌ No tienes figuras que regalar.", ephemeral=True)
+            return
+
+        # Mostrar figuras únicas
+        seen = {}
+        for i, fd in enumerate(figs):
+            k = fd["key"]
+            if k not in seen:
+                seen[k] = i
+        options = []
+        for k, idx in list(seen.items())[:25]:
+            fig = FIGURES.get(k, {})
+            lvl = figs[idx].get("level", 1)
+            options.append(discord.SelectOption(
+                label=f"{fig.get('name', k)} (Nv.{lvl})",
+                value=str(idx),
+                emoji=fig.get("emoji", "🎭"),
+                description=fig.get("rarity", "").upper()
+            ))
+
+        sel = discord.ui.Select(placeholder="Elige la figura a regalar...", options=options)
+        async def sel_cb(si: discord.Interaction):
+            if si.user.id != interaction.user.id:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            chosen_idx = int(sel.values[0])
+            db3 = load_db()
+            g3 = get_user(db3, interaction.user.id)
+            r3 = get_user(db3, usuario.id)
+            if chosen_idx >= len(g3.get("figures", [])):
+                await si.response.send_message("❌ Figura no encontrada.", ephemeral=True)
+                return
+            fig_data = g3["figures"].pop(chosen_idx)
+            # Ajustar team si apuntaba a esa figura
+            team = g3.get("team", [None, None, None])
+            for ti, tidx in enumerate(team):
+                if tidx == chosen_idx:
+                    team[ti] = None
+                elif tidx is not None and tidx > chosen_idx:
+                    team[ti] = tidx - 1
+            g3["team"] = team
+            if "figures" not in r3: r3["figures"] = []
+            r3["figures"].append(fig_data)
+            save_db(db3)
+            fig = FIGURES.get(fig_data["key"], {})
+            embed3 = discord.Embed(
+                title="🎁 ¡Figura regalada!",
+                description=f"**{g3['name']}** le regaló **{fig.get('emoji','')} {fig.get('name', fig_data['key'])}** a **{r3['name']}**!",
+                color=0x9b59b6
+            )
+            if fig.get("image"):
+                embed3.set_thumbnail(url=fig["image"])
+            await si.response.edit_message(embed=embed3, view=None)
+
+        sel.callback = sel_cb
+        sv = discord.ui.View(timeout=60)
+        sv.add_item(sel)
+        await inter.response.edit_message(
+            embed=discord.Embed(title="🎭 ¿Qué figura regalas?", color=0x9b59b6),
+            view=sv
+        )
+
+    async def gift_ing_cb(inter: discord.Interaction):
+        if inter.user.id != interaction.user.id:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        db2 = load_db()
+        g2 = get_user(db2, interaction.user.id)
+        ings = {k: v for k, v in g2.get("ingredients", {}).items() if v > 0}
+        if not ings:
+            await inter.response.send_message("❌ No tienes ingredientes que regalar.", ephemeral=True)
+            return
+        options = [
+            discord.SelectOption(label=f"{INGREDIENTS.get(k, k)} x{v}", value=k, emoji=k)
+            for k, v in list(ings.items())[:25]
+        ]
+        sel = discord.ui.Select(placeholder="Elige el ingrediente...", options=options)
+
+        async def ing_sel_cb(si: discord.Interaction):
+            if si.user.id != interaction.user.id:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            chosen_ing = sel.values[0]
+            # Modal para cantidad
+            modal = discord.ui.Modal(title="🧺 ¿Cuántos regalar?")
+            qty_input = discord.ui.TextInput(label=f"Tienes {ings[chosen_ing]}x {INGREDIENTS.get(chosen_ing,chosen_ing)}. ¿Cuántos?", placeholder="Ej: 1", max_length=5)
+            modal.add_item(qty_input)
+            async def ing_modal_submit(mi: discord.Interaction):
+                try:
+                    qty = int(qty_input.value.strip())
+                except ValueError:
+                    await mi.response.send_message("❌ Cantidad inválida.", ephemeral=True)
+                    return
+                db3 = load_db()
+                g3 = get_user(db3, interaction.user.id)
+                r3 = get_user(db3, usuario.id)
+                available = g3.get("ingredients", {}).get(chosen_ing, 0)
+                if qty <= 0 or qty > available:
+                    await mi.response.send_message(f"❌ Cantidad inválida. Tienes {available}.", ephemeral=True)
+                    return
+                g3["ingredients"][chosen_ing] = available - qty
+                if "ingredients" not in r3: r3["ingredients"] = {}
+                r3["ingredients"][chosen_ing] = r3["ingredients"].get(chosen_ing, 0) + qty
+                save_db(db3)
+                ing_name = INGREDIENTS.get(chosen_ing, chosen_ing)
+                embed4 = discord.Embed(
+                    title="🎁 ¡Ingrediente regalado!",
+                    description=f"**{g3['name']}** le regaló **{qty}x {chosen_ing} {ing_name}** a **{r3['name']}**!",
+                    color=0xe67e22
+                )
+                await mi.response.send_message(embed=embed4)
+            modal.on_submit = ing_modal_submit
+            await si.response.send_modal(modal)
+
+        sel.callback = ing_sel_cb
+        sv = discord.ui.View(timeout=60)
+        sv.add_item(sel)
+        await inter.response.edit_message(
+            embed=discord.Embed(title="🧺 ¿Qué ingrediente regalas?", color=0xe67e22),
+            view=sv
+        )
+
+    gold_btn.callback = gift_gold_cb
+    fig_btn.callback  = gift_fig_cb
+    ing_btn.callback  = gift_ing_cb
+    view.add_item(gold_btn)
+    view.add_item(fig_btn)
+    view.add_item(ing_btn)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+# --- TRADE ---
+pending_trades = {}  # {receiver_id: trade_data}
+
+@bot.tree.command(name="trade", description="Propone un intercambio de oro, figuras o ingredientes")
+@app_commands.describe(usuario="Usuario con quien hacer el trade")
+async def trade(interaction: discord.Interaction, usuario: discord.Member):
+    if usuario.id == interaction.user.id:
+        await interaction.response.send_message("❌ No puedes tradear contigo mismo.", ephemeral=True)
+        return
+    db = load_db()
+    offerer = get_user(db, interaction.user.id)
+    receiver = get_user(db, usuario.id)
+    if not offerer:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    if not receiver:
+        await interaction.response.send_message("❌ Ese usuario no está registrado.", ephemeral=True)
+        return
+    if usuario.id in pending_trades:
+        await interaction.response.send_message("❌ Ese usuario ya tiene un trade pendiente.", ephemeral=True)
+        return
+
+    # Estado del trade: lo que ofrece cada lado
+    trade_state = {
+        "offerer_id":  interaction.user.id,
+        "receiver_id": usuario.id,
+        "offer":       {"coins": 0, "figures": [], "ingredients": {}},
+        "request":     {"coins": 0, "figures": [], "ingredients": {}},
+        "confirmed":   {"offerer": False, "receiver": False},
+    }
+
+    async def build_trade_embed():
+        db2 = load_db()
+        o2 = get_user(db2, interaction.user.id)
+        r2 = get_user(db2, usuario.id)
+        embed = discord.Embed(title="🔄 Propuesta de Trade", color=0x3498db)
+        embed.add_field(
+            name=f"📤 {o2['name']} ofrece",
+            value=(
+                f"💰 {trade_state['offer']['coins']:,}🪙\n"
+                + "\n".join(f"🎭 {FIGURES.get(fk,{{}}).get('name',fk)}" for fk in trade_state['offer']['figures'])
+                + "\n".join(f"{k} {INGREDIENTS.get(k,k)} x{v}" for k,v in trade_state['offer']['ingredients'].items() if v>0)
+            ) or "_(nada aún)_",
+            inline=True
+        )
+        embed.add_field(
+            name=f"📥 {r2['name']} ofrece",
+            value=(
+                f"💰 {trade_state['request']['coins']:,}🪙\n"
+                + "\n".join(f"🎭 {FIGURES.get(fk,{{}}).get('name',fk)}" for fk in trade_state['request']['figures'])
+                + "\n".join(f"{k} {INGREDIENTS.get(k,k)} x{v}" for k,v in trade_state['request']['ingredients'].items() if v>0)
+            ) or "_(nada aún)_",
+            inline=True
+        )
+
+    def build_trade_view():
+        view = discord.ui.View(timeout=120)
+
+        # Botón añadir a mi oferta
+        add_offer_btn = discord.ui.Button(label="📤 Añadir a mi oferta", style=discord.ButtonStyle.primary, custom_id="add_offer")
+        # Botón añadir a lo que pido
+        add_req_btn   = discord.ui.Button(label="📥 Añadir lo que pido", style=discord.ButtonStyle.secondary, custom_id="add_req")
+        # Confirmar
+        confirm_btn   = discord.ui.Button(label="✅ Confirmar", style=discord.ButtonStyle.success, custom_id="confirm_trade")
+        # Cancelar
+        cancel_btn    = discord.ui.Button(label="❌ Cancelar", style=discord.ButtonStyle.danger, custom_id="cancel_trade")
+
+        async def add_offer_cb(inter: discord.Interaction):
+            if inter.user.id not in (interaction.user.id, usuario.id):
+                await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
+                return
+            side = "offer" if inter.user.id == interaction.user.id else "request"
+            await show_trade_add_menu(inter, trade_state, side, interaction, usuario, build_trade_view, build_trade_embed)
+
+        async def add_req_cb(inter: discord.Interaction):
+            if inter.user.id not in (interaction.user.id, usuario.id):
+                await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
+                return
+            side = "request" if inter.user.id == interaction.user.id else "offer"
+            await show_trade_add_menu(inter, trade_state, side, interaction, usuario, build_trade_view, build_trade_embed)
+
+        async def confirm_cb(inter: discord.Interaction):
+            if inter.user.id == interaction.user.id:
+                trade_state["confirmed"]["offerer"] = True
+            elif inter.user.id == usuario.id:
+                trade_state["confirmed"]["receiver"] = True
+            else:
+                await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
+                return
+
+            if trade_state["confirmed"]["offerer"] and trade_state["confirmed"]["receiver"]:
+                # Ejecutar el trade
+                await execute_trade(inter, trade_state, interaction, usuario)
+            else:
+                emb = await build_trade_embed()
+                await inter.response.edit_message(embed=emb, view=build_trade_view())
+
+        async def cancel_cb(inter: discord.Interaction):
+            if inter.user.id not in (interaction.user.id, usuario.id):
+                await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
+                return
+            pending_trades.pop(usuario.id, None)
+            cancel_embed = discord.Embed(title="❌ Trade cancelado.", color=0xe74c3c)
+            await inter.response.edit_message(embed=cancel_embed, view=None)
+
+        add_offer_btn.callback = add_offer_cb
+        add_req_btn.callback   = add_req_cb
+        confirm_btn.callback   = confirm_cb
+        cancel_btn.callback    = cancel_cb
+
+        view.add_item(add_offer_btn)
+        view.add_item(add_req_btn)
+        view.add_item(confirm_btn)
+        view.add_item(cancel_btn)
+        return view
+
+    pending_trades[usuario.id] = trade_state
+    emb = await build_trade_embed()
+    await interaction.response.send_message(
+        content=f"{usuario.mention} — **{offerer['name']}** quiere hacer un trade contigo!",
+        embed=emb,
+        view=build_trade_view()
+    )
+
+
+async def show_trade_add_menu(inter, trade_state, side, orig_inter, target_member, build_view_fn, build_embed_fn):
+    """Muestra el menú para añadir oro/figura/ingrediente al lado del trade."""
+    user_id = inter.user.id
+    embed = discord.Embed(title="➕ ¿Qué quieres añadir?", color=0x3498db)
+    view = discord.ui.View(timeout=60)
+
+    gold_btn = discord.ui.Button(label="💰 Oro", style=discord.ButtonStyle.primary)
+    fig_btn  = discord.ui.Button(label="🎭 Figura", style=discord.ButtonStyle.primary)
+    ing_btn  = discord.ui.Button(label="🧺 Ingrediente", style=discord.ButtonStyle.primary)
+
+    async def gold_trade_cb(gi: discord.Interaction):
+        if gi.user.id != user_id: return
+        modal = discord.ui.Modal(title="💰 Añadir oro al trade")
+        amt = discord.ui.TextInput(label="¿Cuánto oro?", placeholder="Ej: 200", max_length=10)
+        modal.add_item(amt)
+        async def gold_submit(mi: discord.Interaction):
+            try: amount = int(amt.value.strip())
+            except: await mi.response.send_message("❌ Inválido.", ephemeral=True); return
+            db2 = load_db()
+            u2 = get_user(db2, user_id)
+            if u2.get("coins",0) < amount:
+                await mi.response.send_message(f"❌ No tienes suficiente. Tienes {u2.get('coins',0):,}🪙", ephemeral=True)
+                return
+            trade_state[side]["coins"] += amount
+            emb2 = await build_embed_fn()
+            await mi.response.edit_message(embed=emb2, view=build_view_fn())
+        modal.on_submit = gold_submit
+        await gi.response.send_modal(modal)
+
+    async def fig_trade_cb(fi: discord.Interaction):
+        if fi.user.id != user_id: return
+        db2 = load_db()
+        u2 = get_user(db2, user_id)
+        figs = u2.get("figures", [])
+        if not figs:
+            await fi.response.send_message("❌ No tienes figuras.", ephemeral=True)
+            return
+        seen = {}
+        for i, fd in enumerate(figs):
+            k = fd["key"]
+            if k not in seen and k not in trade_state[side]["figures"]:
+                seen[k] = i
+        if not seen:
+            await fi.response.send_message("❌ Sin figuras disponibles para añadir.", ephemeral=True)
+            return
+        options = []
+        for k, idx in list(seen.items())[:25]:
+            fig = FIGURES.get(k, {})
+            options.append(discord.SelectOption(label=f"{fig.get('name',k)}", value=k, emoji=fig.get("emoji","🎭")))
+        sel = discord.ui.Select(placeholder="Figura a añadir...", options=options)
+        async def fig_sel_cb(si: discord.Interaction):
+            trade_state[side]["figures"].append(sel.values[0])
+            emb2 = await build_embed_fn()
+            await si.response.edit_message(embed=emb2, view=build_view_fn())
+        sel.callback = fig_sel_cb
+        sv = discord.ui.View(timeout=60)
+        sv.add_item(sel)
+        await fi.response.edit_message(embed=discord.Embed(title="🎭 Elige figura", color=0x9b59b6), view=sv)
+
+    async def ing_trade_cb(ii: discord.Interaction):
+        if ii.user.id != user_id: return
+        db2 = load_db()
+        u2 = get_user(db2, user_id)
+        ings = {k: v for k, v in u2.get("ingredients", {}).items() if v > 0}
+        if not ings:
+            await ii.response.send_message("❌ No tienes ingredientes.", ephemeral=True)
+            return
+        options = [
+            discord.SelectOption(label=f"{INGREDIENTS.get(k,k)} x{v}", value=k, emoji=k)
+            for k, v in list(ings.items())[:25]
+        ]
+        sel = discord.ui.Select(placeholder="Ingrediente a añadir...", options=options)
+        async def ing_sel_cb(si: discord.Interaction):
+            chosen = sel.values[0]
+            modal = discord.ui.Modal(title="🧺 ¿Cuántos?")
+            qty_inp = discord.ui.TextInput(label=f"Tienes {ings[chosen]}x. ¿Cuántos añades?", placeholder="Ej: 1", max_length=5)
+            modal.add_item(qty_inp)
+            async def ing_modal_sub(mi: discord.Interaction):
+                try: qty = int(qty_inp.value.strip())
+                except: await mi.response.send_message("❌ Inválido.", ephemeral=True); return
+                if qty <= 0 or qty > ings[chosen]:
+                    await mi.response.send_message(f"❌ Máximo {ings[chosen]}.", ephemeral=True); return
+                trade_state[side]["ingredients"][chosen] = trade_state[side]["ingredients"].get(chosen,0) + qty
+                emb2 = await build_embed_fn()
+                await mi.response.edit_message(embed=emb2, view=build_view_fn())
+            modal.on_submit = ing_modal_sub
+            await si.response.send_modal(modal)
+        sel.callback = ing_sel_cb
+        sv = discord.ui.View(timeout=60)
+        sv.add_item(sel)
+        await ii.response.edit_message(embed=discord.Embed(title="🧺 Elige ingrediente", color=0xe67e22), view=sv)
+
+    gold_btn.callback = gold_trade_cb
+    fig_btn.callback  = fig_trade_cb
+    ing_btn.callback  = ing_trade_cb
+    view.add_item(gold_btn)
+    view.add_item(fig_btn)
+    view.add_item(ing_btn)
+    await inter.response.edit_message(embed=embed, view=view)
+
+
+async def execute_trade(inter: discord.Interaction, trade_state, orig_inter, target_member):
+    """Ejecuta el intercambio final."""
+    db = load_db()
+    offerer = get_user(db, trade_state["offerer_id"])
+    receiver = get_user(db, trade_state["receiver_id"])
+
+    offer   = trade_state["offer"]
+    request = trade_state["request"]
+
+    # Validar que ambos tienen suficiente
+    if offerer.get("coins",0) < offer["coins"]:
+        await inter.response.edit_message(embed=discord.Embed(title="❌ Trade fallido", description=f"{offerer['name']} no tiene suficiente oro.", color=0xe74c3c), view=None)
+        pending_trades.pop(trade_state["receiver_id"], None)
+        return
+    if receiver.get("coins",0) < request["coins"]:
+        await inter.response.edit_message(embed=discord.Embed(title="❌ Trade fallido", description=f"{receiver['name']} no tiene suficiente oro.", color=0xe74c3c), view=None)
+        pending_trades.pop(trade_state["receiver_id"], None)
+        return
+
+    # Intercambiar oro
+    offerer["coins"] = offerer.get("coins",0) - offer["coins"] + request["coins"]
+    receiver["coins"] = receiver.get("coins",0) - request["coins"] + offer["coins"]
+
+    # Intercambiar figuras (offerer → receiver)
+    for fig_key in offer["figures"]:
+        idx = next((i for i, f in enumerate(offerer.get("figures",[])) if f["key"]==fig_key), None)
+        if idx is not None:
+            fig_data = offerer["figures"].pop(idx)
+            receiver.setdefault("figures", []).append(fig_data)
+
+    # Intercambiar figuras (receiver → offerer)
+    for fig_key in request["figures"]:
+        idx = next((i for i, f in enumerate(receiver.get("figures",[])) if f["key"]==fig_key), None)
+        if idx is not None:
+            fig_data = receiver["figures"].pop(idx)
+            offerer.setdefault("figures", []).append(fig_data)
+
+    # Intercambiar ingredientes
+    for k, v in offer["ingredients"].items():
+        offerer.setdefault("ingredients",{})[k] = offerer["ingredients"].get(k,0) - v
+        receiver.setdefault("ingredients",{})[k] = receiver["ingredients"].get(k,0) + v
+    for k, v in request["ingredients"].items():
+        receiver.setdefault("ingredients",{})[k] = receiver["ingredients"].get(k,0) - v
+        offerer.setdefault("ingredients",{})[k] = offerer["ingredients"].get(k,0) + v
+
+    save_db(db)
+    pending_trades.pop(trade_state["receiver_id"], None)
+
+    embed = discord.Embed(
+        title="✅ ¡Trade completado!",
+        description=f"**{offerer['name']}** y **{receiver['name']}** completaron el intercambio exitosamente.",
+        color=0x2ecc71
+    )
+    if offer["coins"] > 0 or request["coins"] > 0:
+        embed.add_field(name="💰 Oro intercambiado", value=f"{offerer['name']}: -{offer['coins']:,}🪙 +{request['coins']:,}🪙\n{receiver['name']}: -{request['coins']:,}🪙 +{offer['coins']:,}🪙", inline=False)
+    await inter.response.edit_message(embed=embed, view=None)
 
 # ============================================================
 #  ARRANQUE
