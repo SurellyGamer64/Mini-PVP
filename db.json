@@ -1,0 +1,22 @@
+{
+  "users": {
+    "1236293193893412975": {
+      "name": "Gamer64",
+      "coins": 1190,
+      "figures": [
+        {
+          "key": "robin",
+          "level": 1,
+          "xp": 0
+        }
+      ],
+      "active_figure": "robin",
+      "wins": 0,
+      "losses": 2,
+      "level": 1,
+      "xp": 0,
+      "last_daily": "2026-05-09T17:06:04.842544+00:00",
+      "daily_streak": 1
+    }
+  }
+}
