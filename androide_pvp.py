@@ -66,7 +66,7 @@ def create_user(db, user_id, display_name):
 FIGURES = {
     "gamer64": {
         "name": "Gamer64",
-        "emoji": "🤖",
+        "emoji": "<:GamerNew:1506838491491729498>",
         "rarity": "raro",
         "price": 640,
         "hp": 142,
@@ -88,7 +88,7 @@ FIGURES = {
     },
     "alex": {
         "name": "Alex",
-        "emoji": "<:sketch1778366830925:1503043086564069497>",
+        "emoji": "<:Neomoji:1506838331315458058>",
         "rarity": "legendario",
         "price": 215,
         "hp": 250,
