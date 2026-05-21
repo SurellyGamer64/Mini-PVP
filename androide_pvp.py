@@ -286,6 +286,17 @@ FIGURES = {
         "speed": 35,
         "image": "https://static.wikia.nocookie.net/forsaken2024/images/4/4e/JaneDoerender.png/revision/latest/smart/width/300/height/300?cb=20260308103449",
     },
+    "donmanzanas": {
+        "name": "Don Manzanas",
+        "emoji": "🍎",
+        "rarity": "común",
+        "price": 400,
+        "hp": 160,
+        "attack": 19,
+        "defense": 40,
+        "speed": 41,
+        "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQitxgXjvgIbadMnhQmNWfrG9uAdy7UC4Th_g&s",
+    },
 }
 
 RARITY_COLOR = {
@@ -885,6 +896,34 @@ FIGURE_SKILLS = {
             "desc": "Jane lanza su hacha hacia el enemigo, haciéndole daño y aplicando Resonancia (8 daño/turno x4).",
         },
     ],
+    "donmanzanas": [
+        {
+            "name": "Apple Shot",
+            "cost": 30,
+            "type": "apple_shot",      # se concentra 3 turnos; al 3er uso dispara con daño máximo (max 33)
+            "power": 25,
+            "max_power": 33,
+            "charges_needed": 3,
+            "desc": "Don Manzanas se concentra por 3 turnos. Al estar lo suficientemente concentrado, ¡tira su manzana con toda su fuerza!",
+        },
+        {
+            "name": "Apple Armor",
+            "cost": 60,
+            "type": "apple_armor",     # reduce daño recibido durante 2 turnos
+            "power": 0,
+            "armor_turns": 2,
+            "armor_reduction": 0.5,    # recibe solo el 50% del daño
+            "desc": "Don Manzanas construye una armadura de manzanas a toda velocidad. ¡Recibe menos daño por 2 turnos!",
+        },
+        {
+            "name": "Golden Apple",
+            "cost": 100,
+            "type": "golden_apple",    # potencia el próximo ataque (acumulable)
+            "power": 0,
+            "atk_buff": 14,            # +14 ATK al próximo golpe (acumulable, hasta max 33 de ATK total)
+            "desc": "Don Manzanas saca una Manzana Dorada. ¡Su próximo ataque será mucho más potente! (Acumulable)",
+        },
+    ],
 }
 
 
@@ -1343,6 +1382,12 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
         max_power = max((sk.get("power", 0) for sk in attacker["skills"]), default=20)
         base_dmg = max(1, round(max_power / 2))
         dmg = max(1, base_dmg + (bonus_atk // 2) + random.randint(-2, 3) - (defender["defense"] // 6))
+        # Apple Armor: reduce el daño recibido
+        if defender.get("apple_armor_turns", 0) > 0:
+            reduction = defender.get("apple_armor_reduction", 0.5)
+            dmg = max(1, int(dmg * reduction))
+            defender["apple_armor_turns"] -= 1
+            battle.log.append(f"   🍎🛡️ **Apple Armor** absorbe el golpe! (daño reducido al {int(reduction*100)}%, quedan {defender['apple_armor_turns']} turnos)")
         defender["hp"] = max(0, defender["hp"] - dmg)
         buff_txt = f" (⭐+{bonus_atk} ATK)" if bonus_atk else ""
         battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** ataca{buff_txt} → **{dmg}** daño! (+20⚡)")
@@ -1381,6 +1426,12 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             entangle_bonus = 15 if defender.get("entangled") else 0
             effective_atk = attacker["atk"] + bonus_atk + entangle_bonus
             dmg = battle.calc_damage(effective_atk, defender["defense"], skill["power"])
+            # Apple Armor: reduce el daño recibido
+            if defender.get("apple_armor_turns", 0) > 0:
+                reduction = defender.get("apple_armor_reduction", 0.5)
+                dmg = max(1, int(dmg * reduction))
+                defender["apple_armor_turns"] -= 1
+                battle.log.append(f"   🍎🛡️ **Apple Armor** absorbe el golpe! (daño reducido al {int(reduction*100)}%, quedan {defender['apple_armor_turns']} turnos)")
             defender["hp"] = max(0, defender["hp"] - dmg)
             buff_txt = f" (⭐+{bonus_atk} ATK)" if bonus_atk else ""
             battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**{buff_txt} → **{dmg}** daño!")
@@ -2188,6 +2239,43 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"💢 **{attacker['emoji']} {attacker['name']}** activa la **TRAMPA**! ¡20 daño/turno x3!")
             else:
                 battle.log.append(f"💢 **{attacker['emoji']} {attacker['name']}** coloca una trampa... ({charges}/3)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "apple_shot":
+            # Don Manzanas — se concentra 3 turnos; al 3er uso dispara con daño máximo
+            charges = attacker.get("apple_shot_charges", 0) + 1
+            attacker["apple_shot_charges"] = charges
+            needed = skill.get("charges_needed", 3)
+            if charges >= needed:
+                attacker["apple_shot_charges"] = 0
+                max_pow = skill.get("max_power", 33)
+                dmg = battle.calc_damage(attacker["atk"], defender["defense"], max_pow)
+                defender["hp"] = max(0, defender["hp"] - dmg)
+                battle.log.append(f"🍎 **{attacker['emoji']} {attacker['name']}** lanza su **Apple Shot** con TODO su poder → **{dmg}** daño!")
+                battle.log.append(f"   💥 ¡La manzana sale disparada como un misil!")
+                battle.log.append(f"   _{skill['desc']}_")
+            else:
+                battle.log.append(f"🍎 **{attacker['emoji']} {attacker['name']}** se **concentra**... ({charges}/{needed})")
+                battle.log.append(f"   ⚠️ ¡{needed - charges} turno(s) más para liberar la manzana!")
+                battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "apple_armor":
+            # Don Manzanas — armadura de manzanas: reduce daño recibido N turnos
+            turns = skill.get("armor_turns", 2)
+            reduction = skill.get("armor_reduction", 0.5)
+            attacker["apple_armor_turns"] = turns
+            attacker["apple_armor_reduction"] = reduction
+            battle.log.append(f"🍎🛡️ **{attacker['emoji']} {attacker['name']}** construye su **Apple Armor**!")
+            battle.log.append(f"   ¡Recibirá solo el {int(reduction*100)}% del daño durante {turns} turnos!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "golden_apple":
+            # Don Manzanas — potencia el próximo ataque (acumulable)
+            buff = skill.get("atk_buff", 14)
+            attacker["atk_buff"] = attacker.get("atk_buff", 0) + buff
+            total = attacker["atk_buff"]
+            battle.log.append(f"🍏✨ **{attacker['emoji']} {attacker['name']}** saca una **Golden Apple**!")
+            battle.log.append(f"   ¡Su próximo ataque tendrá +{buff} ATK extra! (Total acumulado: +{total})")
             battle.log.append(f"   _{skill['desc']}_")
 
         elif stype == "crystal_switch":
