@@ -24,19 +24,88 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "!"
 
 # ============================================================
-#  BASE DE DATOS (JSON simple, sin necesidad de SQL)
+#  BASE DE DATOS — Supabase (persistente y gratuito)
+#  Variables de entorno en Render:
+#    SUPABASE_URL = https://xxxx.supabase.co
+#    SUPABASE_KEY = eyJ...
 # ============================================================
-DB_FILE = "db.json"
+import requests as _requests
 
-def load_db():
-    if not os.path.exists(DB_FILE):
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+
+def _supa_headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
+
+def load_db() -> dict:
+    """Carga todos los usuarios desde Supabase."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        # Fallback a JSON local si no hay Supabase configurado
+        import os as _os
+        if _os.path.exists("db.json"):
+            with open("db.json", "r") as f:
+                import json as _json
+                return _json.load(f)
         return {"users": {}}
-    with open(DB_FILE, "r") as f:
-        return json.load(f)
 
-def save_db(db):
-    with open(DB_FILE, "w") as f:
-        json.dump(db, f, indent=2)
+    try:
+        r = _requests.get(
+            f"{SUPABASE_URL}/rest/v1/users?select=uid,data",
+            headers=_supa_headers(),
+            timeout=10
+        )
+        users = {}
+        for row in r.json():
+            users[row["uid"]] = row["data"]
+        return {"users": users}
+    except Exception as e:
+        print(f"⚠️ Error cargando DB: {e}")
+        return {"users": {}}
+
+def save_db(db: dict):
+    """Guarda todos los usuarios modificados en Supabase."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        with open("db.json", "w") as f:
+            import json as _json
+            _json.dump(db, f, indent=2)
+        return
+
+    for uid, data in db.get("users", {}).items():
+        try:
+            _requests.post(
+                f"{SUPABASE_URL}/rest/v1/users",
+                headers={**_supa_headers(), "Prefer": "resolution=merge-duplicates,return=minimal"},
+                json={"uid": uid, "data": data},
+                timeout=10
+            )
+        except Exception as e:
+            print(f"⚠️ Error guardando usuario {uid}: {e}")
+
+def save_user(uid: str, data: dict):
+    """Guarda un solo usuario (más eficiente que save_db completo)."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        # En modo JSON guarda todo
+        db = load_db()
+        db["users"][str(uid)] = data
+        with open("db.json", "w") as f:
+            import json as _json
+            _json.dump(db, f, indent=2)
+        return
+
+    try:
+        _requests.post(
+            f"{SUPABASE_URL}/rest/v1/users",
+            headers={**_supa_headers(), "Prefer": "resolution=merge-duplicates,return=minimal"},
+            json={"uid": str(uid), "data": data},
+            timeout=10
+        )
+    except Exception as e:
+        print(f"⚠️ Error guardando usuario {uid}: {e}")
 
 def get_user(db, user_id):
     uid = str(user_id)
